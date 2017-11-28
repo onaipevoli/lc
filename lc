@@ -1,0 +1,112 @@
+#!/usr/bin/perl
+
+use strict;
+use Term::ReadLine;
+use Term::ReadLine::Gnu;
+
+my %priorityNumber;
+$priorityNumber{'*'}=1;
+$priorityNumber{'/'}=1;
+$priorityNumber{'+'}=2;
+$priorityNumber{'-'}=2;
+$priorityNumber{'<<'}=3;
+$priorityNumber{'>>'}=3;
+$priorityNumber{'('}=99;
+$priorityNumber{')'}=99;
+
+my $term = new Term::ReadLine 'my_term';
+my $prompt = "lc: ";
+#my $OUT = $term->OUT || \*STDOUT;
+
+
+#while (<STDIN>) {
+while (defined ($_ = $term->readline($prompt))) {
+    my @execStack;
+    my @workStack;
+    my $p;
+
+    chomp;
+    # Remove leading space
+    s/^ +//;
+    while ($_) {
+        if (s/(^0x[0-9A-Fa-f]+)//) {
+            # Hex
+            push(@execStack, hex($1));
+            #print "HEX ", $1, "\n";
+        } elsif (s/^(\d+)//) {
+            # Decimal 
+            # This conditon must be placed after Hex
+            # Beacus 0x is illegally interpreted by this condition
+            push(@execStack, $1);
+            #print "DEC ", $1, "\n";
+        } elsif (s/^(\()//) {
+            # (
+            push(@workStack, $1);
+        } elsif (s/^(\))//) {
+            # )
+            while ($#workStack >= 0 && ($p = pop(@workStack)) ne "(") {
+                push(@execStack, $p);
+            }
+        } elsif (s/^([\+\-\*\/]|<<|>>)//) {
+            # +-*/
+            my $token = $1;
+            while ($#workStack >= 0) {
+                $p = $workStack[$#workStack];
+                if ($priorityNumber{$token} < $priorityNumber{$p}) {
+                    # Token has priority
+                    last;
+                } else {
+                    # Stack Top has priority
+                    push(@execStack, pop(@workStack));
+                }
+            }
+            push(@workStack, $token);
+        } else {
+            print "parse error: $_\n";
+            last;
+        }
+        s/^ +//;
+    }
+
+    while ($#workStack >= 0) {
+        push(@execStack, pop(@workStack));
+    }
+
+    executeCalculation(@execStack);
+
+}
+
+exit 0;
+
+sub executeCalculation
+{
+    my @s;
+    my $result;
+
+    foreach my $t (@_) {
+        if ($t =~ /^\d+$/) {
+            # Push number
+            push(@s, $t);
+        } elsif ($t =~ /^[\+\-\*\/]|<<|>>$/) {
+            # If it's an operator, take two items out of stack,
+            # and do operatoin.
+            if ($#s < 1) {
+                print STDERR "Immature operation\n";
+                return;
+            }
+            my $b = pop(@s);
+            my $a = pop(@s);
+            push(@s, eval("$a $t $b"));
+        } else {
+            print STDERR "$t: unknown op\n";
+        }
+    }
+    if ($#s != 0) {
+        print STDERR "Immature operation\n";
+        return;
+    }
+
+    $result = pop(@s);
+    print "DEC:   ", $result, "\n";
+    printf "HEX: 0x%x\n", $result;
+}
