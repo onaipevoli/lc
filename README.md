@@ -1,0 +1,2 @@
+# lc
+Logic designers calculator
